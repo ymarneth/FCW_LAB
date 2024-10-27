@@ -8,6 +8,8 @@
 #include <iostream>
 #include <typeinfo>
 
+#include "Language.h"
+
 using namespace std;
 
 #include "SignalHandling.h"
@@ -133,7 +135,7 @@ int main(int argc, char *argv[]) {
 
 
         // *** test case selection: 1, 2, or 3 ***
-#define TESTCASE 4
+#define TESTCASE 5
         // ***************************************
 
         cout << "TESTCASE " << TESTCASE << endl << endl;
@@ -216,12 +218,41 @@ int main(int argc, char *argv[]) {
 
         // Generate epsilon-free grammar
         const Grammar *epsilonFreeGrammar = newEpsilonFreeGrammar(originalGrammar);
-        cout << "Epsilon-Free Grammar:" << endl;
+        cout << endl << "Epsilon-Free Grammar:" << endl;
         cout << *epsilonFreeGrammar << endl;
 
         // Clean up
         delete originalGrammar;
         delete epsilonFreeGrammar;
+
+#elif TESTCASE == 5
+
+        // Step 1: Define and build the grammar using GrammarBuilder
+        const auto *gb = new GrammarBuilder(
+            "G(S):                      \n\
+            S -> a B | b A                 \n\
+            A -> a | a S | b A A           \n\
+            B -> b | b S | a B B            ");
+        const Grammar *g = gb->buildGrammar();
+
+        cout << "Grammar:" << endl;
+        cout << *g << endl;
+
+        // Step 2: Generate the language up to max length of 3
+        constexpr int maxLength = 3;
+        const Language *language = Language::languageOf(g, maxLength);
+
+        // Step 3: Display the generated sequences in the language
+        const auto &sequences = language->getSequences();
+        std::cout << endl << "Generated language sequences up to length " << maxLength << ":\n";
+        for (const Sequence *seq: sequences) {
+            std::cout << *seq << std::endl;
+        }
+
+        // Clean up
+        delete gb;
+        delete language; // Cleans up sequences in Language destructor
+        delete g; // Delete grammar after use if dynamically allocated
 
 #else // none of the TESTCASEs above
 
