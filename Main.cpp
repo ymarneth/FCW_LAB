@@ -227,7 +227,6 @@ int main(int argc, char *argv[]) {
 
 #elif TESTCASE == 5
 
-        // Step 1: Define and build the grammar using GrammarBuilder
         const auto *gb = new GrammarBuilder(
             "G(S):                      \n\
             S -> a B | b A                 \n\
@@ -238,21 +237,39 @@ int main(int argc, char *argv[]) {
         cout << "Grammar:" << endl;
         cout << *g << endl;
 
-        // Step 2: Generate the language up to max length of 3
-        constexpr int maxLength = 3;
+        constexpr int maxLength = 6;
         const Language *language = Language::languageOf(g, maxLength);
 
-        // Step 3: Display the generated sequences in the language
         const auto &sequences = language->getSequences();
         std::cout << endl << "Generated language sequences up to length " << maxLength << ":\n";
         for (const Sequence *seq: sequences) {
             std::cout << *seq << std::endl;
         }
 
-        // Clean up
+        TSymbol *a  = sp-> tSymbol("a");
+        TSymbol *b  = sp-> tSymbol("b");
+
+        const Sequence *targetSequence1 = new Sequence({b, a, a});
+        const bool exists = language->hasSentence(targetSequence1);
+
+        if (exists) {
+            std::cout << "The sequence " << *targetSequence1 << " exists in the language." << std::endl;
+        } else {
+            std::cout << "The sequence " << *targetSequence1 << " does not exist in the language." << std::endl;
+        }
+
+        const Sequence *targetSequence2 = new Sequence({b, b, a});
+        const bool exists2 = language->hasSentence(targetSequence2);
+
+        if (exists2) {
+            std::cout << "The sequence " << *targetSequence2 << " exists in the language." << std::endl;
+        } else {
+            std::cout << "The sequence " << *targetSequence2 << " does not exist in the language." << std::endl;
+        }
+
         delete gb;
-        delete language; // Cleans up sequences in Language destructor
-        delete g; // Delete grammar after use if dynamically allocated
+        delete language;
+        delete g;
 
 #else // none of the TESTCASEs above
 

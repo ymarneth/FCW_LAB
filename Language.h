@@ -10,6 +10,8 @@ public:
 
     static Language *languageOf(const Grammar *g, int maxLen);
 
+    bool hasSentence(const Sequence *s) const;
+
     const std::vector<Sequence *> &getSequences() const;
 
     ~Language();

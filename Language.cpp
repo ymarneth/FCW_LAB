@@ -32,7 +32,7 @@ void processNonTerminal(const NTSymbol *symbol, const Grammar *g, const Sequence
     for (const Sequence *seq: currentSequenceSet) {
         std::cout << "Looking at sequence: " << *seq << std::endl;
 
-        Sequence newSequence(currentSequence);  // Start with a copy of the current sequence
+        Sequence newSequence(currentSequence); // Start with a copy of the current sequence
         std::cout << "Current Sequence before expansion: " << newSequence << std::endl;
 
         bool allTerminals = true; // Flag to ensure all symbols are terminals
@@ -40,7 +40,7 @@ void processNonTerminal(const NTSymbol *symbol, const Grammar *g, const Sequence
         for (const Symbol *symbol1: *seq) {
             if (symbol1->isT()) {
                 std::cout << "Terminal symbol found: " << *symbol1 << std::endl;
-                newSequence.append(const_cast<Symbol *>(symbol1));  // Append terminal symbol directly
+                newSequence.append(const_cast<Symbol *>(symbol1)); // Append terminal symbol directly
             } else {
                 allTerminals = false;
                 std::cout << "Non-terminal symbol found: " << *symbol1 << " - Recursing" << std::endl;
@@ -64,15 +64,24 @@ Language *Language::languageOf(const Grammar *g, const int maxLen) {
     auto *language = new Language();
 
     const auto *root = g->root;
-    const Sequence initialSequence;  // Start with an empty sequence
-    std::set<Sequence> allSequences;  // Set to hold unique terminal sequences
+    const Sequence initialSequence; // Start with an empty sequence
+    std::set<Sequence> allSequences; // Set to hold unique terminal sequences
 
-    processNonTerminal(root, g, initialSequence, allSequences, maxLen);  // Generate sequences
+    processNonTerminal(root, g, initialSequence, allSequences, maxLen); // Generate sequences
 
     // Copy valid sequences into the language object
     for (const auto &seq: allSequences) {
-        language->sequences.push_back(new Sequence(seq));  // Add each valid sequence to the language
+        language->sequences.push_back(new Sequence(seq)); // Add each valid sequence to the language
     }
 
     return language;
+}
+
+bool Language::hasSentence(const Sequence *s) const {
+    for (const Sequence *seq: sequences) {
+        if (*seq == *s) {
+            return true;
+        }
+    }
+    return false;
 }
