@@ -12,6 +12,8 @@ public:
 
     bool hasSentence(const Sequence *s) const;
 
+    bool hasAllSentences(const std::vector<Sequence *> &sequencesToCheck) const;
+
     const std::vector<Sequence *> &getSequences() const;
 
     ~Language();

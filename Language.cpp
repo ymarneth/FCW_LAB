@@ -1,87 +1,107 @@
 #include "Language.h"
 
+#include <algorithm>
 #include <queue>
 #include <set>
 
-// Constructor
 Language::Language() = default;
 
-// Destructor
 Language::~Language() = default;
 
-// Get the sequences
 const std::vector<Sequence *> &Language::getSequences() const {
     return sequences;
 }
 
-// Recursive function to process non-terminal symbols
-void processNonTerminal(const NTSymbol *symbol, const Grammar *g, const Sequence &currentSequence,
-                        std::set<Sequence> &allSequences, const int maxLen) {
-    std::cout << "Processing non-terminal: " << *symbol << std::endl;
+void processNonTerminalSymbols(const NTSymbol *rootSymbol, const Grammar *g, std::set<Sequence> &allSequences,
+                               const int maxLen) {
+    std::queue<std::pair<Sequence, std::vector<const Symbol *> > > queue;
+    queue.push({Sequence(), {rootSymbol}});
 
-    // If the current sequence has reached the maximum length, stop processing
-    if (currentSequence.length() >= maxLen) {
-        std::cout << "Reached max length with sequence: " << currentSequence << std::endl;
-        return;
-    }
+    while (!queue.empty()) {
+        auto [currentSequence, symbolsToExpand] = queue.front();
+        queue.pop();
 
-    // Get the set of possible expansions for the current non-terminal
-    const auto currentSequenceSet = g->rules.find(const_cast<NTSymbol *>(symbol))->second;
-    std::cout << "SequenceSet for symbol: " << *symbol << ": " << currentSequenceSet << std::endl;
-
-    for (const Sequence *seq: currentSequenceSet) {
-        std::cout << "Looking at sequence: " << *seq << std::endl;
-
-        Sequence newSequence(currentSequence); // Start with a copy of the current sequence
-        std::cout << "Current Sequence before expansion: " << newSequence << std::endl;
-
-        bool allTerminals = true; // Flag to ensure all symbols are terminals
-
-        for (const Symbol *symbol1: *seq) {
-            if (symbol1->isT()) {
-                std::cout << "Terminal symbol found: " << *symbol1 << std::endl;
-                newSequence.append(const_cast<Symbol *>(symbol1)); // Append terminal symbol directly
-            } else {
-                allTerminals = false;
-                std::cout << "Non-terminal symbol found: " << *symbol1 << " - Recursing" << std::endl;
-                // Recursively process non-terminals in the sequence
-                processNonTerminal(dynamic_cast<const NTSymbol *>(symbol1), g, newSequence, allSequences, maxLen);
+        // Check if the current sequence contains only terminal symbols
+        bool isFullyTerminal = true;
+        for (const Symbol *symbol: symbolsToExpand) {
+            if (!symbol->isT()) {
+                isFullyTerminal = false;
+                break;
             }
         }
 
-        // After processing the entire sequence, add only if all symbols are terminals
-        if (allTerminals && newSequence.length() <= maxLen) {
-            std::cout << "Adding valid terminal-only sequence: " << newSequence << std::endl;
-            allSequences.insert(newSequence);
-        } else {
-            std::cout << "Discarded incomplete or over-length sequence: " << newSequence << std::endl;
+        // If fully terminal and within maxLen, add it to results and skip further expansion
+        if (isFullyTerminal && currentSequence.length() + symbolsToExpand.size() <= maxLen) {
+            Sequence fullSequence = currentSequence;
+            for (const Symbol *symbol: symbolsToExpand) {
+                fullSequence.append(const_cast<Symbol *>(symbol));
+            }
+            allSequences.insert(fullSequence);
+            continue;
+        }
+
+        // Stop expanding if the length constraint is reached
+        if (currentSequence.length() >= maxLen) {
+            continue;
+        }
+
+        // Expand the next symbol in `symbolsToExpand` list if not empty
+        if (!symbolsToExpand.empty()) {
+            const Symbol *nextSymbol = symbolsToExpand.front();
+            std::vector<const Symbol *> remainingSymbols(symbolsToExpand.begin() + 1, symbolsToExpand.end());
+
+            if (nextSymbol->isT()) {
+                // Append terminal symbol and continue expanding remaining symbols
+                Sequence newSequence(currentSequence);
+                newSequence.append(const_cast<Symbol *>(nextSymbol));
+                queue.emplace(newSequence, remainingSymbols);
+            } else {
+                // Expand non-terminal by exploring its production rules
+                const auto &currentSequenceSet = g->rules.find(
+                    const_cast<NTSymbol *>(dynamic_cast<const NTSymbol *>(nextSymbol)))->second;
+
+                for (const Sequence *productionSeq: currentSequenceSet) {
+                    Sequence newSequence(currentSequence); // Start with current sequence copy
+                    std::vector<const Symbol *> newSymbolsToExpand(remainingSymbols);
+
+                    // Add symbols of this production to the front of remaining symbols
+                    newSymbolsToExpand.insert(newSymbolsToExpand.begin(), productionSeq->begin(), productionSeq->end());
+
+                    queue.emplace(newSequence, newSymbolsToExpand);
+                }
+            }
         }
     }
 }
 
-// Main function to generate the language of a given grammar up to max length
+// Adjust the languageOf function to use the BFS version of processNonTerminal
 Language *Language::languageOf(const Grammar *g, const int maxLen) {
     auto *language = new Language();
-
     const auto *root = g->root;
-    const Sequence initialSequence; // Start with an empty sequence
-    std::set<Sequence> allSequences; // Set to hold unique terminal sequences
+    std::set<Sequence> allSequences;
 
-    processNonTerminal(root, g, initialSequence, allSequences, maxLen); // Generate sequences
+    // Generate sequences using breadth-first expansion
+    processNonTerminalSymbols(root, g, allSequences, maxLen);
 
     // Copy valid sequences into the language object
     for (const auto &seq: allSequences) {
-        language->sequences.push_back(new Sequence(seq)); // Add each valid sequence to the language
+        language->sequences.push_back(new Sequence(seq));
     }
 
     return language;
 }
 
 bool Language::hasSentence(const Sequence *s) const {
-    for (const Sequence *seq: sequences) {
-        if (*seq == *s) {
-            return true;
-        }
-    }
-    return false;
+    return std::any_of(
+        sequences.begin(),
+        sequences.end(),
+        [s](const Sequence *seq) { return *seq == *s; }
+    );
+}
+
+bool Language::hasAllSentences(const std::vector<Sequence *> &sequencesToCheck) const {
+    return std::all_of(
+        sequencesToCheck.begin(),
+        sequencesToCheck.end(),
+        [this](const Sequence *s) { return this->hasSentence(s); });
 }

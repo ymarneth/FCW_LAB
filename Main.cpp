@@ -246,26 +246,52 @@ int main(int argc, char *argv[]) {
             std::cout << *seq << std::endl;
         }
 
-        TSymbol *a  = sp-> tSymbol("a");
-        TSymbol *b  = sp-> tSymbol("b");
+        TSymbol *a = sp->tSymbol("a");
+        TSymbol *b = sp->tSymbol("b");
 
-        const Sequence *targetSequence1 = new Sequence({b, a, a});
-        const bool exists = language->hasSentence(targetSequence1);
+        std::vector<Sequence *> expectedSequences;
 
-        if (exists) {
-            std::cout << "The sequence " << *targetSequence1 << " exists in the language." << std::endl;
-        } else {
-            std::cout << "The sequence " << *targetSequence1 << " does not exist in the language." << std::endl;
+        expectedSequences.push_back(new Sequence({a, a, a, b, b, b}));
+        expectedSequences.push_back(new Sequence({a, a, b, a, b, b}));
+        expectedSequences.push_back(new Sequence({a, a, b, b}));
+        expectedSequences.push_back(new Sequence({a, a, b, b, a, b}));
+        expectedSequences.push_back(new Sequence({a, a, b, b, b, a}));
+        expectedSequences.push_back(new Sequence({a, b}));
+        expectedSequences.push_back(new Sequence({a, b, a, a, b, b}));
+        expectedSequences.push_back(new Sequence({a, b, a, b}));
+        expectedSequences.push_back(new Sequence({a, b, a, b, a, b}));
+        expectedSequences.push_back(new Sequence({a, b, a, b, b, a}));
+        expectedSequences.push_back(new Sequence({a, b, b, a}));
+        expectedSequences.push_back(new Sequence({a, b, b, a, a, b}));
+        expectedSequences.push_back(new Sequence({a, b, b, a, b, a}));
+        expectedSequences.push_back(new Sequence({a, b, b, b, a, a}));
+        expectedSequences.push_back(new Sequence({b, a}));
+        expectedSequences.push_back(new Sequence({b, a, a, a, b, b}));
+        expectedSequences.push_back(new Sequence({b, a, a, b}));
+        expectedSequences.push_back(new Sequence({b, a, a, b, a, b}));
+        expectedSequences.push_back(new Sequence({b, a, a, b, b, a}));
+        expectedSequences.push_back(new Sequence({b, a, b, a}));
+        expectedSequences.push_back(new Sequence({b, a, b, a, a, b}));
+        expectedSequences.push_back(new Sequence({b, a, b, a, b, a}));
+        expectedSequences.push_back(new Sequence({b, a, b, b, a, a}));
+        expectedSequences.push_back(new Sequence({b, b, a, a}));
+        expectedSequences.push_back(new Sequence({b, b, a, a, a, b}));
+        expectedSequences.push_back(new Sequence({b, b, a, a, b, a}));
+        expectedSequences.push_back(new Sequence({b, b, a, b, a, a}));
+        expectedSequences.push_back(new Sequence({b, b, b, a, a, a}));
+
+        constexpr size_t expectedCount = 28;
+        if (sequences.size() != expectedCount) {
+            throw std::runtime_error("Error: The number of generated sequences does not match the expected count.");
         }
 
-        const Sequence *targetSequence2 = new Sequence({b, b, a});
-        const bool exists2 = language->hasSentence(targetSequence2);
-
-        if (exists2) {
-            std::cout << "The sequence " << *targetSequence2 << " exists in the language." << std::endl;
-        } else {
-            std::cout << "The sequence " << *targetSequence2 << " does not exist in the language." << std::endl;
+        for (const auto &seq: expectedSequences) {
+            if (!language->hasSentence(seq)) {
+                throw std::runtime_error("Error: Required sequence missing from language.");
+            }
         }
+
+        std::cout << "All required sequences are present in the language." << std::endl;
 
         delete gb;
         delete language;
