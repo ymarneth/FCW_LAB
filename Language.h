@@ -7,19 +7,20 @@
 class Language {
 public:
     Language();
+    Language(Language&&) noexcept;
 
-    static Language *languageOf(const Grammar *g, int maxLen);
+    static Language languageOf(const Grammar *g, int maxLen);
 
-    bool hasSentence(const Sequence *s) const;
+    bool hasSentence(const Sequence &s) const;
 
-    bool hasAllSentences(const std::vector<Sequence *> &sequencesToCheck) const;
+    bool hasAllSentences(const std::vector<Sequence> &sequencesToCheck) const;
 
-    const std::vector<Sequence *> &getSequences() const;
+    const std::vector<Sequence> &getSequences() const;
 
     ~Language();
 
 private:
-    std::vector<Sequence *> sequences; // Store sequences of terminal symbols
+    std::vector<Sequence> sequences;
 };
 
-#endif // LANGUAGE_H
+#endif

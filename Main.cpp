@@ -9,9 +9,6 @@
 #include <typeinfo>
 
 #include "Language.h"
-
-using namespace std;
-
 #include "SignalHandling.h"
 #include "Timer.h"
 #include "SymbolStuff.h"
@@ -21,11 +18,27 @@ using namespace std;
 #include "GrammarBuilder.h"
 #include "Grammar.h"
 
-vector<Sequence *> generateEpsilonFreeCombinations(const Sequence *seq, const VNt &epsilonNonterminals) {
+using namespace std;
+
+bool containsEpsilonOrMarkedNT(const Sequence &seq, const VNt &epsilonNonterminals) {
+    return std::any_of(seq.begin(), seq.end(), [&epsilonNonterminals](Symbol *s) {
+        return s->isNT() && epsilonNonterminals.contains(dynamic_cast<NTSymbol *>(s));
+    });
+}
+
+void addSequenceIfNonDeletable(GrammarBuilder &epsilonFreeBuilder, const Sequence &seq, NTSymbol *nt,
+                               const VNt &epsilonNonterminals) {
+    const auto seqContainsEpsilonOrMarkedNT = containsEpsilonOrMarkedNT(seq, epsilonNonterminals);
+    if (!seqContainsEpsilonOrMarkedNT && !seq.isEpsilon()) {
+        epsilonFreeBuilder.addRule(nt, new Sequence(seq));
+    }
+}
+
+vector<Sequence *> generateEpsilonFreeCombinations(const Sequence &seq, const VNt &epsilonNonterminals) {
     vector<Sequence *> result;
     result.push_back(new Sequence());
 
-    for (Symbol *s: *seq) {
+    for (Symbol *s: seq) {
         const size_t currentSize = result.size();
         if (s->isNT() && epsilonNonterminals.contains(dynamic_cast<NTSymbol *>(s))) {
             // For epsilon-producing NTs, include both with and without NT
@@ -41,7 +54,7 @@ vector<Sequence *> generateEpsilonFreeCombinations(const Sequence *seq, const VN
         }
     }
 
-    // Remove fully epsilon (empty) sequences
+    // Remove fully epsilon sequences
     result.erase(remove_if(result.begin(), result.end(),
                            [](const Sequence *s) { return s->empty() || s->isEpsilon(); }),
                  result.end());
@@ -49,16 +62,16 @@ vector<Sequence *> generateEpsilonFreeCombinations(const Sequence *seq, const VN
     return result;
 }
 
-bool containsEpsilonOrMarkedNT(const Sequence &seq, const VNt &epsilonNonterminals) {
-    return std::any_of(seq.begin(), seq.end(), [&epsilonNonterminals](Symbol *s) {
-        return s->isNT() && epsilonNonterminals.contains(dynamic_cast<NTSymbol *>(s));
-    });
-}
+void explodeDeletableRules(GrammarBuilder &epsilonFreeBuilder, const Sequence &seq, NTSymbol *nt,
+                           const VNt &epsilonNonterminals) {
+    const auto containsMarkedNT = containsEpsilonOrMarkedNT(seq, epsilonNonterminals);
+    if (!containsMarkedNT) return;
 
-void addSequenceIfNonDeletable(GrammarBuilder &epsilonFreeBuilder, const Sequence &seq, NTSymbol* nt, const VNt &epsilonNonterminals) {
-    const auto seqContainsEpsilonOrMarkedNT = containsEpsilonOrMarkedNT(seq, epsilonNonterminals);
-    if (!seqContainsEpsilonOrMarkedNT && !seq.isEpsilon()) {
-        epsilonFreeBuilder.addRule(nt, new Sequence(seq));
+    vector<Sequence *> newCombinations = generateEpsilonFreeCombinations(seq, epsilonNonterminals);
+    for (Sequence *newSeq: newCombinations) {
+        if (!newSeq->isEpsilon()) {
+            epsilonFreeBuilder.addRule(nt, newSeq);
+        }
     }
 }
 
@@ -70,45 +83,25 @@ Grammar *newEpsilonFreeGrammar(const Grammar *g) {
     const VNt epsilonNonterminals = g->deletableNTs();
     cout << "Deletable non-terminals: " << epsilonNonterminals << endl;
 
-    // Step 2: Copy all rules without epsilon or marked NTs on the right side
     for (const auto &rule: g->rules) {
-        auto const &[nt, sequenceSet] = rule;
+        auto const &nt = rule.first;
+        auto const &sequenceSet = rule.second;
         for (const Sequence *seq: sequenceSet) {
+            // Step 2: Copy all rules without epsilon or marked NTs on the right side
             addSequenceIfNonDeletable(*epsilonFreeBuilder, *seq, nt, epsilonNonterminals);
-        }
-    }
 
-    // Step 3: Generate all possible combinations for rules with marked NTs
-    for (const auto &rule: g->rules) {
-        NTSymbol *nt = rule.first;
-        for (const Sequence *seq: rule.second) {
-            bool containsMarkedNT = false;
-            for (Symbol *s: *seq) {
-                if (s->isNT() && epsilonNonterminals.contains(dynamic_cast<NTSymbol *>(s))) {
-                    containsMarkedNT = true;
-                    break;
-                }
-            }
-            if (containsMarkedNT) {
-                vector<Sequence *> newCombinations = generateEpsilonFreeCombinations(seq, epsilonNonterminals);
-                for (Sequence *newSeq: newCombinations) {
-                    if (!newSeq->isEpsilon()) {
-                        // Skip adding epsilon sequences
-                        epsilonFreeBuilder->addRule(nt, newSeq);
-                    }
-                }
-            }
+            // Step 3: Generate all possible combinations for rules with marked NTs
+            explodeDeletableRules(*epsilonFreeBuilder, *seq, nt, epsilonNonterminals);
         }
     }
 
     // Step 4: Add S' -> S | ε if S is deletable
     if (epsilonNonterminals.contains(g->root)) {
         cout << "Root is deletable" << endl;
-        auto *sp = new SymbolPool();
-        NTSymbol *optS = sp->ntSymbol("S'");
+        SymbolPool sp;
+        auto *optS = sp.ntSymbol("S'");
         epsilonFreeBuilder->addRule(optS, new Sequence(g->root));
         epsilonFreeBuilder->addRule(optS, new Sequence());
-        delete sp;
     }
 
     Grammar *resultGrammar = epsilonFreeBuilder->buildGrammar();
@@ -136,7 +129,7 @@ int main(int argc, char *argv[]) {
 
 
         // *** test case selection: 1, 2, or 3 ***
-#define TESTCASE 4
+#define TESTCASE 5
         // ***************************************
 
         cout << "TESTCASE " << TESTCASE << endl << endl;
@@ -208,17 +201,17 @@ int main(int argc, char *argv[]) {
 
         // Test case 4: Test epsilon-free grammar conversion
         const GrammarBuilder gb4(
-            "G(S):                          \n\
+            "G(S):                     \n\
                  S -> A B C               \n\
                  A -> B B | eps           \n\
                  B -> C C | a             \n\
                  C -> A A | b             ");
-        const Grammar *originalGrammar = gb4.buildGrammar();
+
+        const auto *originalGrammar = gb4.buildGrammar();
         cout << "Original Grammar with epsilon rules:" << endl;
         cout << *originalGrammar << endl;
 
-        // Generate epsilon-free grammar
-        const Grammar *epsilonFreeGrammar = newEpsilonFreeGrammar(originalGrammar);
+        const auto *epsilonFreeGrammar = newEpsilonFreeGrammar(originalGrammar);
         cout << endl << "Epsilon-Free Grammar:" << endl;
         cout << *epsilonFreeGrammar << endl;
 
@@ -228,74 +221,50 @@ int main(int argc, char *argv[]) {
 
 #elif TESTCASE == 5
 
-        const auto *gb = new GrammarBuilder(
+        const GrammarBuilder gb(
             "G(S):                      \n\
-            S -> a B | b A                 \n\
-            A -> a | a S | b A A           \n\
-            B -> b | b S | a B B            ");
-        const Grammar *g = gb->buildGrammar();
+    S -> a B | b A                 \n\
+    A -> a | a S | b A A           \n\
+    B -> b | b S | a B B            ");
+        const Grammar *g = gb.buildGrammar();
 
         cout << "Grammar:" << endl;
         cout << *g << endl;
 
         constexpr int maxLength = 6;
-        const Language *language = Language::languageOf(g, maxLength);
+        const auto language = Language::languageOf(g, maxLength);
 
-        const auto &sequences = language->getSequences();
-        std::cout << endl << "Generated language sequences up to length " << maxLength << ":\n";
-        for (const Sequence *seq: sequences) {
-            std::cout << *seq << std::endl;
+        const auto &sequences = language.getSequences();
+        std::cout << "\nGenerated language sequences up to length " << maxLength << ":\n";
+        for (const auto &seq: sequences) {
+            std::cout << seq << std::endl;
         }
 
         TSymbol *a = sp->tSymbol("a");
         TSymbol *b = sp->tSymbol("b");
 
-        std::vector<Sequence *> expectedSequences;
+        std::vector<Sequence> expectedSequences = {
+            {a, a, a, b, b, b}, {a, a, b, a, b, b}, {a, a, b, b}, {a, a, b, b, a, b},
+            {a, a, b, b, b, a}, {a, b}, {a, b, a, a, b, b}, {a, b, a, b}, {a, b, a, b, a, b},
+            {a, b, a, b, b, a}, {a, b, b, a}, {a, b, b, a, a, b}, {a, b, b, a, b, a},
+            {a, b, b, b, a, a}, {b, a}, {b, a, a, a, b, b}, {b, a, a, b}, {b, a, a, b, a, b},
+            {b, a, a, b, b, a}, {b, a, b, a}, {b, a, b, a, a, b}, {b, a, b, a, b, a},
+            {b, a, b, b, a, a}, {b, b, a, a}, {b, b, a, a, a, b}, {b, b, a, a, b, a},
+            {b, b, a, b, a, a}, {b, b, b, a, a, a}
+        };
 
-        expectedSequences.push_back(new Sequence({a, a, a, b, b, b}));
-        expectedSequences.push_back(new Sequence({a, a, b, a, b, b}));
-        expectedSequences.push_back(new Sequence({a, a, b, b}));
-        expectedSequences.push_back(new Sequence({a, a, b, b, a, b}));
-        expectedSequences.push_back(new Sequence({a, a, b, b, b, a}));
-        expectedSequences.push_back(new Sequence({a, b}));
-        expectedSequences.push_back(new Sequence({a, b, a, a, b, b}));
-        expectedSequences.push_back(new Sequence({a, b, a, b}));
-        expectedSequences.push_back(new Sequence({a, b, a, b, a, b}));
-        expectedSequences.push_back(new Sequence({a, b, a, b, b, a}));
-        expectedSequences.push_back(new Sequence({a, b, b, a}));
-        expectedSequences.push_back(new Sequence({a, b, b, a, a, b}));
-        expectedSequences.push_back(new Sequence({a, b, b, a, b, a}));
-        expectedSequences.push_back(new Sequence({a, b, b, b, a, a}));
-        expectedSequences.push_back(new Sequence({b, a}));
-        expectedSequences.push_back(new Sequence({b, a, a, a, b, b}));
-        expectedSequences.push_back(new Sequence({b, a, a, b}));
-        expectedSequences.push_back(new Sequence({b, a, a, b, a, b}));
-        expectedSequences.push_back(new Sequence({b, a, a, b, b, a}));
-        expectedSequences.push_back(new Sequence({b, a, b, a}));
-        expectedSequences.push_back(new Sequence({b, a, b, a, a, b}));
-        expectedSequences.push_back(new Sequence({b, a, b, a, b, a}));
-        expectedSequences.push_back(new Sequence({b, a, b, b, a, a}));
-        expectedSequences.push_back(new Sequence({b, b, a, a}));
-        expectedSequences.push_back(new Sequence({b, b, a, a, a, b}));
-        expectedSequences.push_back(new Sequence({b, b, a, a, b, a}));
-        expectedSequences.push_back(new Sequence({b, b, a, b, a, a}));
-        expectedSequences.push_back(new Sequence({b, b, b, a, a, a}));
-
-        constexpr size_t expectedCount = 28;
-        if (sequences.size() != expectedCount) {
+        if (sequences.size() != expectedSequences.size()) {
             throw std::runtime_error("Error: The number of generated sequences does not match the expected count.");
         }
 
         for (const auto &seq: expectedSequences) {
-            if (!language->hasSentence(seq)) {
+            if (!language.hasSentence(seq)) {
                 throw std::runtime_error("Error: Required sequence missing from language.");
             }
         }
 
         std::cout << "All required sequences are present in the language." << std::endl;
 
-        delete gb;
-        delete language;
         delete g;
 
 #else // none of the TESTCASEs above
