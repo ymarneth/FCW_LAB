@@ -23,7 +23,7 @@ using namespace std;
 
 vector<Sequence *> generateEpsilonFreeCombinations(const Sequence *seq, const VNt &epsilonNonterminals) {
     vector<Sequence *> result;
-    result.push_back(new Sequence()); // Start with an empty sequence
+    result.push_back(new Sequence());
 
     for (Symbol *s: *seq) {
         const size_t currentSize = result.size();
@@ -49,29 +49,32 @@ vector<Sequence *> generateEpsilonFreeCombinations(const Sequence *seq, const VN
     return result;
 }
 
+bool containsEpsilonOrMarkedNT(const Sequence &seq, const VNt &epsilonNonterminals) {
+    return std::any_of(seq.begin(), seq.end(), [&epsilonNonterminals](Symbol *s) {
+        return s->isNT() && epsilonNonterminals.contains(dynamic_cast<NTSymbol *>(s));
+    });
+}
+
+void addSequenceIfNonDeletable(GrammarBuilder &epsilonFreeBuilder, const Sequence &seq, NTSymbol* nt, const VNt &epsilonNonterminals) {
+    const auto seqContainsEpsilonOrMarkedNT = containsEpsilonOrMarkedNT(seq, epsilonNonterminals);
+    if (!seqContainsEpsilonOrMarkedNT && !seq.isEpsilon()) {
+        epsilonFreeBuilder.addRule(nt, new Sequence(seq));
+    }
+}
+
 Grammar *newEpsilonFreeGrammar(const Grammar *g) {
     // Initialize a new grammar builder with the same root
-    GrammarBuilder *epsilonFreeBuilder = nullptr;
-    epsilonFreeBuilder = new GrammarBuilder(g->root);
+    const auto epsilonFreeBuilder = std::make_unique<GrammarBuilder>(g->root);
 
-    // 1. Mark all deletable non-terminals
+    // Step 1 Mark all deletable non-terminals
     const VNt epsilonNonterminals = g->deletableNTs();
     cout << "Deletable non-terminals: " << epsilonNonterminals << endl;
 
     // Step 2: Copy all rules without epsilon or marked NTs on the right side
     for (const auto &rule: g->rules) {
-        NTSymbol *nt = rule.first;
-        for (const Sequence *seq: rule.second) {
-            bool containsEpsilonOrMarkedNT = false;
-            for (Symbol *s: *seq) {
-                if (s->isNT() && epsilonNonterminals.contains(dynamic_cast<NTSymbol *>(s))) {
-                    containsEpsilonOrMarkedNT = true;
-                    break;
-                }
-            }
-            if (!containsEpsilonOrMarkedNT && !seq->isEpsilon()) {
-                epsilonFreeBuilder->addRule(nt, new Sequence(*seq));
-            }
+        auto const &[nt, sequenceSet] = rule;
+        for (const Sequence *seq: sequenceSet) {
+            addSequenceIfNonDeletable(*epsilonFreeBuilder, *seq, nt, epsilonNonterminals);
         }
     }
 
@@ -108,10 +111,8 @@ Grammar *newEpsilonFreeGrammar(const Grammar *g) {
         delete sp;
     }
 
-    // Return the new epsilon-free grammar
     Grammar *resultGrammar = epsilonFreeBuilder->buildGrammar();
-    delete epsilonFreeBuilder; // Clean up the GrammarBuilder after use
-    return resultGrammar; // Ownership of resultGrammar is transferred to the caller
+    return resultGrammar;
 }
 
 int main(int argc, char *argv[]) {
@@ -135,7 +136,7 @@ int main(int argc, char *argv[]) {
 
 
         // *** test case selection: 1, 2, or 3 ***
-#define TESTCASE 5
+#define TESTCASE 4
         // ***************************************
 
         cout << "TESTCASE " << TESTCASE << endl << endl;
