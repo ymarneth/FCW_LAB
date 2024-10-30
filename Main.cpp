@@ -102,6 +102,7 @@ Grammar *newEpsilonFreeGrammar(const Grammar *g) {
         auto *optS = sp.ntSymbol("S'");
         epsilonFreeBuilder->addRule(optS, new Sequence(g->root));
         epsilonFreeBuilder->addRule(optS, new Sequence());
+        epsilonFreeBuilder->setNewRoot(optS);
     }
 
     Grammar *resultGrammar = epsilonFreeBuilder->buildGrammar();
